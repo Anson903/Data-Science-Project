@@ -1,0 +1,461 @@
+---
+title: "Project"
+author: "Anson Poon Ka Nok (a1818504)"
+date: "2023-06-27"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Question 1
+
+```{r setup, include=FALSE}
+pacman::p_load(tidyverse, vcd, ggcorrplot, MASS, car, Metrics) #load the necessary package
+```
+```{r}
+diabete <- read.csv('diabetes_prediction_dataset.csv' ) #read the csv file
+df <- na.omit(diabete) # omit any missing value
+df$diabetes <- as.factor(df$diabetes)
+head(df) 
+```
+
+# 1.1 Exploreatory Data Analisis
+
+### Do the EDA on  df, use different plots to indicate the relationship between outcome variable (diabetes) and other predictors
+```{r}
+skimr::skim(df) #display the summary table of variables
+```
+
+### Relationship between diabetes and gender
+```{r}
+a <- table(df$diabetes, df$gender)
+barplot(a, 
+        beside = FALSE,
+        legend = TRUE,
+        col = df$age,
+        xlab = "Gender",
+        ylab = "Frequency",
+        main = "Association between gender and diabetes") # create a histogram
+```
+
+#### The histogram show that both male and female have a similar proportion of individuals that has diabetes.
+
+### Relationship between age and diabetes
+```{r}
+ggplot(df, aes(x=age,
+               y=diabetes)) +
+  geom_jitter(height = 0.05,
+              alpha = 0.1) # create a scatter plot
+```
+
+#### The scatter plot indicates that with the increase in age of individuals, the probability of having diabetes increase.
+
+### Relationship between hypertension and diabetes
+```{r}
+ggplot(df, aes(x=hypertension,
+               y=diabetes)) +
+  geom_jitter(height = 0.05,
+              alpha = 0.1) # create a scatter plot
+```
+
+#### The scatter plot indicates that if an individual had high blood pressure, the probability of having diabetes decrease.
+
+### Relationship between heart_disease and diabetes
+```{r}
+ggplot(df, aes(x=heart_disease,
+               y=diabetes)) +
+  geom_jitter(height = 0.05,
+              alpha = 0.1) # create a scatter plot
+```
+
+#### The scatter plot indicates that if an individual suffer from heart disease, the probability of having diabetes decrease.
+
+### Relationship between smoking_history and diabetes
+```{r}
+d <- table(df$diabetes, df$smoking_history)
+barplot(d,
+        beside = FALSE,
+        legend = TRUE,
+        col = df$age,
+        xlab = "smoking_history",
+        ylab = "Frequency",
+        main = "Association between smoking_history and diabetes") # create a histogram
+```
+```{r}
+ggplot(df, aes(x=smoking_history,
+               y=diabetes)) +
+  geom_jitter(height = 0.05,
+              alpha = 0.1) # create a scatter plot
+```
+
+#### The histogram and scatter plot indicates that people have never smoke before are going to have a higher chance to have diabetes, so as the former smoker and people with uncertain smoking history.
+
+### Relationship between bmi and diabetes
+```{r}
+df$diabetes <- as.factor(df$diabetes)
+  ggplot(aes(diabetes, bmi), data = df) + 
+  geom_boxplot() # create a boxplot
+```
+```{r}
+ggplot(df, aes(x=bmi,
+               y=diabetes)) +
+  geom_jitter(height = 0.05,
+              alpha = 0.1) # create a scatter plot
+```
+
+#### The boxplot and scatter plot indicates that with a larger bmi, the probability of having diabetes is higher.
+
+### Relationship between HbA1c_level and diabetes
+```{r}
+df %>% 
+  ggplot(aes(diabetes, HbA1c_level)) + 
+  geom_boxplot() # create a boxplot
+```
+```{r}
+ggplot(df, aes(x=HbA1c_level,
+               y=diabetes)) +
+  geom_jitter(height = 0.05,
+              alpha = 0.1) # create a scatter plot
+```
+
+#### The boxplot and scatter plot indicates that with a higher HbA1c_level, the probability of having diabetes is much higher.
+
+### Relationship between blood_glucose_level and diabetes
+```{r}
+df %>% 
+  ggplot(aes(diabetes, blood_glucose_level)) + 
+  geom_boxplot() # create a boxplot
+```
+```{r}
+ggplot(df, aes(x=blood_glucose_level,
+               y=diabetes)) +
+  geom_jitter(height = 0.05,
+              alpha = 0.1) # create a scatter plot
+```
+
+#### The boxplot and scatter plot indicates that with a higher blood_glucose_level, the probability of having diabetes is much higher.
+
+### Distribution of diabetes
+```{r}
+e <- table(df$diabetes)
+custom_labels <- paste0(c("No diabetes: 91500",  c("diatebetes: 8500")))
+pie(e,
+    labels = custom_labels,
+    main = "Distribution of diabetes") # create a pie chart of the outcome variable
+```
+
+#### The pie chart show the distribution of diabetes with a large proportion of people do not have diabetes.
+
+# 1.2 Model Selection
+
+### Since the outcome variable is a bianry data, and I want to predict whether a person will have diabetes or not, using binary logistic regression can effectively fit the model and do the prediction.
+### The assumptions of logistic model are outcome variable is a binary data, all the case is independent and the predictor do not correlate strongly with each other.
+
+### Fit the logistic regression model with the outcome variable and all predictors first
+```{r}
+m1 <- glm(diabetes ~., 
+          family=binomial,
+          data=df) # fit the logistic model with all predictors
+summary(m1)
+```
+
+#### Since gender and smoking_history have insignificant data (p-value > 0.05), another logistic regression will be use without taking gender and smoking_history as predictor.
+
+```{r}
+m2 <- glm(diabetes ~ age + hypertension + heart_disease + bmi + HbA1c_level + blood_glucose_level ,
+          family=binomial,
+          data=df) # fit the logistic model without gender and smoking_history
+summary(m2) 
+```
+
+### From the model, all predictors in general are significant. Compare both model to check which one fit the model better
+```{r}
+anova(m1, m2, test = "LRT") # do a LRT test
+```
+
+```{r}
+AIC(m1, m2) # get the AIC of both model
+```
+
+#### With both LRT and AIC we see that the full model, m1 is the best, therefore, all predictors in the data are used. If gender and smoking_history are omitted, the model will be worse off.
+
+### Check assumptions of m1
+```{r}
+df <-
+  df %>%
+  add_column(
+    res1 = residuals(m1, type = "pearson"),
+    fit1 = fitted(m1)
+  ) # get the residuals and fitted value of m1
+```
+```{r}
+df %>%
+  ggplot(aes(fit1, res1)) +
+  geom_point() +
+  geom_smooth() # residuals vs fitted plot
+```
+
+### Check the correlation of all predictors in m1 to see if they are independent or not.
+```{r}
+df$gender <- as.factor(df$gender)
+df$smoking_history <- as.factor(df$smoking_history)
+df$gender <- as.numeric(df$gender) # change the data type to numeric data to find the correlation
+df$smoking_history <- as.numeric(df$smoking_history)
+df_corr <- cor(df[1:8])
+df_corr # correlation of all predictors
+```
+
+#### From the residuals vs fitted and the correlation table of predictors, according to the assumptions of logistic regression, m1 adheres to the assumption. First, the dependent variable - diabetes is binary data. Second, from the dataset, we can see each case is independent and does not correlate with each other. Third, the correlation table above indicate the correlation of every predictors against each other. None of them have a correlation greater than 0.7, which is considered as strong, therefore, the assumption is resonable. The residuals vs fitted plot shown a non-linear realtionship between dependent variable and the independent variable and a not normally distributed residuals. However, since logistic regression does not required a linear realationship between dependent and independent variables and error terms do not need to be normally distributed, m1 still has a reasonable assumption.
+
+# 1.3 Application
+
+## 1.3a
+
+### Current probability that Karl has diabetes with given attributes
+```{r}
+new_pt <- 
+  tibble( gender = "Male", 
+          age = 50,
+          hypertension = 1,
+          heart_disease = 0,
+          smoking_history = "current",
+          bmi = 27.32,
+          HbA1c_level = 5.7,
+          blood_glucose_level = 260
+          )
+logit_pred <- predict(m1, newdata = new_pt) # get prediction value
+predict(m1, newdata = new_pt, type = "response") # exp(logit_pred) / (1 + exp(logit_pred))
+```
+
+### The current probability of Karl has diabetes is 0.664.
+
+## 1.3b
+
+### Probability that Karl has diabetes if he lowered his blood glucose to 140
+```{r}
+new_pt1 <- 
+  tibble( gender = "Male", 
+          age = 50,
+          hypertension = 1,
+          heart_disease = 0,
+          smoking_history = "current",
+          bmi = 27.32,
+          HbA1c_level = 5.7,
+          blood_glucose_level = 140
+          )
+logit_pred1 <- predict(m1, newdata = new_pt1) # get prediction value
+predict(m1, newdata = new_pt1, type = "response") # exp(logit_pred1) / (1 + exp(logit_pred1))
+```
+
+### Probability that Karl has diabetes if he quits smoking now
+```{r}
+new_pt2 <- 
+  tibble( gender = "Male", 
+          age = 50,
+          hypertension = 1,
+          heart_disease = 0,
+          smoking_history = "former",
+          bmi = 27.32,
+          HbA1c_level = 5.7,
+          blood_glucose_level = 260
+          ) 
+logit_pred2 <- predict(m1, newdata = new_pt2) # get prediction value
+predict(m1, newdata = new_pt2, type = "response") # exp(logit_pred2) / (1 + exp(logit_pred2))
+```
+
+### Karl has a probability of 0.664 of getting diabetes. From the result above, by lowering blood glucose to 140, the probability of having diabetes is 0.035 and by quit smoking, the probability of having diabetes is 0.63973. Both actions can lower the probability of having diabetes but Karl doctor's suggestion that lower blood glucose can reduce the probability more, therefore, Karl should listen to his doctor.
+
+## 1.3c
+
+### The limitation of my model is that it may not capture all the variables of casuing diabetes, such as eating habit, excerising habit or medicine record, etc. The success of intervention will be unknow since there are no actual supportive data to determine whether it can help diabetes or not.
+
+
+# Q2
+
+```{r}
+boston <- read.csv('boston_fixed.csv' ) # read the csv file
+dt <- na.omit(boston) # omit any missing value
+dt = subset(dt, select = -c(X) ) # delete the column 'x'
+head(dt)
+```
+
+# Q2.1 Exploreatory Data Analysis 
+
+#### Do the EDA on  dt, use different plots to indicate the relationship between outcome variable (MEDV) and other predictors
+```{r}
+skimr::skim(dt) #display the summary table of variables
+```
+
+```{r}
+ # describe all the relationship between outcome variable against predictors in scatter plot
+dt %>% 
+  pivot_longer(-MEDV) %>% 
+  ggplot(aes(value, MEDV)) + 
+  geom_point() + 
+  facet_wrap(~name, scales = "free") + 
+  geom_smooth(method = lm)
+```
+```{r}
+# try the log scale on the predictors
+dt %>% 
+  pivot_longer(-MEDV) %>% 
+  ggplot(aes(log(value), MEDV)) + 
+  geom_point() + 
+  facet_wrap(~name, scales = "free") + 
+  geom_smooth(method = lm) 
+```
+
+#### From the scatter plot that show all the relationship between MEDV and all the predictors in dt, most of them have a negative relationship with MEDV, they are AGE, CRIM, INDUS, LSTAT, NOX, PTRATIO, RAD and TAX. If these variables increase in value, the median value of homes decrease. Four of them  show a positive relationship with MEDV, they are CHAS, DIS, RM and ZN. The median value of homes will increase with the inccrease in these variables. Among all the plots, LSTAT and RM have shown a strong linear relationship with MEDV. Some variables in scatter plot with log scale show a more linear relationship, it can be good for the model prediction afterward.
+
+#### Relationship between CHAS and MEDV
+```{r}
+boxplot(dt$MEDV ~ dt$CHAS, xlab = "CHAS", ylab = "MEDV") # box plot to show more information of MEDV and CHAS
+```
+
+#### From the boxplot, it shows that if Boston tracts bounds river, the median value of home will increase.
+
+### Relationship between RAD and MEDV
+```{r}
+boxplot(dt$MEDV ~ dt$RAD, xlab = "RAD", ylab = "MEDV") ## box plot to show more information of MEDV and RAD
+```
+
+#### From the boxplot, if the index of accessibility of radial highways is 24, the median values of homes drop. Other than that, the median value is all similar.
+
+#### Correlation check of all variables
+```{r}
+dt_corr <- cor(dt)
+ggcorrplot::ggcorrplot(dt_corr, hc.order = TRUE, type = "lower") # heatmap of correlation between all variables
+```
+
+#### The heatmap of correlation show that LSTAT and RM have a strong correlation with MEDV.
+
+
+#### Distribution of outcome variable
+```{r}
+# plot a histogram 
+ggplot(dt, aes(x=MEDV, color="red")) +
+geom_histogram(aes(y=..density..), position="identity", alpha=0.5)+
+geom_density(alpha=0.5) 
+```
+
+#### The histogram of MEDV show that MEDV has a right-skewed distribution.
+
+
+# 2.2 Model Selection
+
+#### Since we want to know how will the median value of homes be effected by certain variables, and in what extend, therefore, a multiple linear regression model is used. The assumptions here are the linearly, homoskedasticity, independent of errors, normally distributed errors and independence of the predictors.
+```{r}
+dt_lm <- lm(MEDV ~. , data = dt) # regression using all predictors
+summary(dt_lm)
+```
+
+#### From the model dt_lm, INDUS and AGE are not significant predictors, create a new model that ignore these two predictors.
+```{r}
+dt_lm2 <- lm(MEDV ~ CRIM + ZN + CHAS + NOX + RM + DIS + RAD + TAX + PTRATIO + LSTAT, data = dt)
+summary(dt_lm2) #regression omitting INDUS and AGE
+```
+
+```{r}
+# Test dt_lm and dt_lm2 fitness
+AIC(dt_lm, dt_lm2)
+```
+
+#### After delete two insignificant predictors, the model is now better in terms of f-statistic and adjusted r squared, also with a lower AIC. Thus CRIM, ZN, CHAS, NOX, RM, DIS, RAD, TAX,  PTRATIO and LSTAT are chosen to be the predictor of the model.
+
+
+#### From the EDA above, some predictors do not have a linear relationship with MEDV with the original value. After taking log to all predictors, CRIM, NOX, DIS and RAD show a better linear relationship, therefore, use the log value in the transformed regression model.
+```{r}
+# Transformation of model
+dt_lm_transformed_X <- lm(MEDV ~ log(CRIM) + ZN + log(NOX) + CHAS  + RM + log(DIS) + log(RAD) + log(TAX) + log(PTRATIO) + log(LSTAT), data = dt)
+summary(dt_lm_transformed_X)
+```
+```{r}
+# test vif of dt_lm_transformed_X
+vif(dt_lm_transformed_X) 
+```
+
+#### Since log(CRIM) has a high VIF and is not statistically significant at the 0.05 significance level. Therefore delete it from the transformed model.
+```{r}
+dt_lm_transformed_X1 <- lm(MEDV ~ ZN + log(NOX) + CHAS  + RM + log(DIS) + log(RAD) + log(TAX) + log(PTRATIO) + log(LSTAT), data = dt)
+summary(dt_lm_transformed_X1)
+```
+
+#### Although there are insignificant varibles, the adjusted r-squared incrased, it should imply that the new transformed model is better. Compare two models with AIC test.
+```{r}
+AIC(dt_lm_transformed_X, dt_lm_transformed_X1) # Compare AIC of both transformed model
+```
+```{r}
+# Compare dt_lm_transformed_X to dt_lm_transformed_X1
+anova(dt_lm_transformed_X, dt_lm_transformed_X1)
+```
+
+#### After comparing both model, dt_lm_transformed_X1 has a lower AIC. The anova result shows a non-significant result (p = 0.564) which suggest dt_lm_transformed_X to be rejected. Therefore I choose dt_lm_transformed_X1 as the best model. Now check the assumptions of the model.
+```{r}
+# check assumptions using plot()
+plot(dt_lm_transformed_X1)
+```
+```{r}
+#check multicollinearity of chosen model
+vif(dt_lm_transformed_X1) 
+```
+
+#### From residuals vs fitted plot, the smooth line is close to zero and the points are evenly scattered around the smooth line with three extreme points, thus, it indicates that residuals follow a linear pattern and the chosen regression is appropriate. From the Scale-Location plot, most of the points lie closely to the red line and does not deviate too widely, as a result, it indicates a equal variance among residuals and assumption of homoscedasticity is reasonable. From the Normal Q-Q plot, most of the points fall along the line with some points deviate from the tail end of the line, but still indicates a normally distributed residuals. From the residuals vs leverage plot, all the obervation lie inside the border of Cook's distance and it indicates that there are no overly influential points in the dataset. From the VIF, the predictors have a low VIF, that means there are no multicollinearity between predictors and they are independence against each other.
+
+### To see whether the adherence to assumptions are improved through transformation.
+```{r}
+gglm:: gglm(dt_lm2) # check the assumption of not transformed model
+```
+```{r}
+gglm:: gglm(dt_lm_transformed_X) # check the assumption of transformed model
+```
+
+#### By comparing both result, the transformation shows improvement in all four plots. For Residuals vs Fitted plot, dt_lm2 has a bell-curve shape but dt_lm_transformed_X1 has a more even distribution of point around the line. The Normal Q-Q plot of dt_lm2 has more points lying off the line than dt_lm_transformed_X1. The line of Scale-Location plot and Residual vs Leverage plot are closer to a straight line in dt_lm_transformed_X1, therefore, the adherence to assumptions are improved through transformation in the model.
+
+
+# 2.3 Execitive Summary
+
+#### In my analysis of the median value of homes in Boston, there were data of twelve attributes that collected to predict the value. However, not all attributes are important or have a strong relationship with the value of homes. Two of them are not good for our prediction model, they are proportion of non-retail business acres per town and proportion of owner-occupied units built prior to 1940. These unsuitable attributes are omitted in the model of prediction. Among all other attributes, I discover that there two attributes that important to the value of homes. They are average number of rooms per dwelling and Percentage of adults without a high school education. If the average number of rooms per dwelling increase, the value of homes increases. If the percentage of adults without a high school education increase, the value of homes decreases. It implies that people are willing to pay more if the house have more rooms and they like to be surrounded by more educated people and it causes the value of homes in those area increases.
+
+
+# 2.4 Application
+
+## 2.4a
+```{r}
+new_pt <- tibble(  CRIM = 0.14866, # save the given attributes in new_pt
+  ZN = 0.00000,
+  INDUS = 8.56000,
+  CHAS = 0.00000,
+  NOX = 0.52000,
+  RM = 6.72700,
+  AGE = 79.90000,
+  DIS = 2.77780,
+  RAD = 5.00000,
+  TAX = 384.00000,
+  PTRATIO = 20.90000,
+  LSTAT = 9.42000
+          )
+dt_pred <- predict(dt_lm_transformed_X1, newdata = new_pt) # Do the prediction of given attributes using chosen model
+dt_pred # Since the outcome variable is log(y), exponential need to added to get the estimated amount
+```
+
+#### The estimated median value of homes in Springfield is $23935.91 according to my chosen model.
+
+## 2.4b
+
+#### The distribution of same attributes based on my model is calculated by the estimated slope of the model and the square of Residual standard error.
+```{r}
+dt_pred 
+```
+```{r}
+4.274^2 # the number is drawn from the Residual standard error of dt_lm_transformed_X1
+```
+
+#### As a result, the distribution is MEDV ~N( 23.936, 18.267 ).
+
+## 2.4c
+ 
+```{r}
+predict(dt_lm_transformed_X1, newdata = new_pt, interval = "confidence") # find the confidence interval of the estimated median
+```
+ 
+#### Since the attributes need to be the same, therefore, by checking the confidence interval of the prediction by my model, the highest possible value of homes is $24764.55 which is below $27500, which means the probability of the median of a home value below $27500 in a sampled town is 100%.
